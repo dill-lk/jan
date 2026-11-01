@@ -1,0 +1,72 @@
+name: Build supercompressed Windows installer
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_ref:
+        description: "Git ref to build"
+        required: true
+        default: "refs/heads/main"
+      version:
+        description: "Version embedded in the installer filename"
+        required: true
+        default: "0.8.8"
+      engine_variant:
+        description: "Bundled llama.cpp backend"
+        required: true
+        type: choice
+        options:
+          - vulkan
+          - cuda13-vulkan
+        default: vulkan
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    uses: ./.github/workflows/template-tauri-build-windows-x64.yml
+    secrets: inherit
+    with:
+      ref: ${{ inputs.build_ref }}
+      public_provider: none
+      channel: stable
+      new_version: ${{ inputs.version }}
+      upload_url: ""
+      engine_variant: ${{ inputs.engine_variant }}
+
+  compress:
+    needs: build
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Download NSIS installer
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: jan-windows-exe-${{ inputs.version }}
+          path: installer
+
+      - name: Compress installer with 7-Zip Ultra
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem installer -Filter *.exe -File | Select-Object -First 1
+          if (-not $exe) {
+            throw "No Windows installer found"
+          }
+          & 7z a -t7z -mx=9 -m0=lzma2 -md=64m -mfb=273 -ms=on `
+            "Jan_${{ inputs.version }}_x64-supercompressed.7z" $exe.FullName
+          if ($LASTEXITCODE -ne 0) {
+            throw "7-Zip failed with exit code $LASTEXITCODE"
+          }
+          7z t "Jan_${{ inputs.version }}_x64-supercompressed.7z"
+          Get-Item "Jan_${{ inputs.version }}_x64-supercompressed.7z" |
+            Select-Object Name, Length
+
+      - name: Upload supercompressed installer
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: jan-windows-supercompressed-${{ inputs.version }}
+          path: Jan_${{ inputs.version }}_x64-supercompressed.7z
+          compression-level: 0
+          if-no-files-found: error
