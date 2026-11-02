@@ -54,19 +54,19 @@ jobs:
           if (-not $exe) {
             throw "No Windows installer found"
           }
-          & 7z a -t7z -mx=9 -m0=lzma2 -md=64m -mfb=273 -ms=on `
-            "Jan_${{ inputs.version }}_x64-supercompressed.7z" $exe.FullName
+          & 7z a -tzip -mx=9 -mm=Deflate -mfb=258 `
+            "Jan_${{ inputs.version }}_x64-supercompressed.zip" $exe.FullName
           if ($LASTEXITCODE -ne 0) {
             throw "7-Zip failed with exit code $LASTEXITCODE"
           }
-          7z t "Jan_${{ inputs.version }}_x64-supercompressed.7z"
-          Get-Item "Jan_${{ inputs.version }}_x64-supercompressed.7z" |
+          7z t "Jan_${{ inputs.version }}_x64-supercompressed.zip"
+          Get-Item "Jan_${{ inputs.version }}_x64-supercompressed.zip" |
             Select-Object Name, Length
 
-      - name: Upload supercompressed installer
+      - name: Upload supercompressed ZIP
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: jan-windows-supercompressed-${{ inputs.version }}
-          path: Jan_${{ inputs.version }}_x64-supercompressed.7z
+          path: Jan_${{ inputs.version }}_x64-supercompressed.zip
           compression-level: 0
           if-no-files-found: error
